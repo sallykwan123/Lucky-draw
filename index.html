@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>30人幸運抽獎機（支援一鍵複製）</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #f1f5f9; display: flex; justify-content: center; padding: 20px; margin: 0; }
+    .container { background: #ffffff; padding: 28px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); max-width: 650px; width: 100%; }
+    h1 { text-align: center; color: #0f172a; margin: 0 0 20px 0; font-size: 24px; }
+    
+    .input-group { margin-bottom: 16px; }
+    label { font-weight: 600; color: #334155; display: block; margin-bottom: 6px; font-size: 14px; }
+    textarea { width: 100%; height: 130px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; resize: vertical; font-size: 14px; outline: none; }
+    textarea:focus, input[type="number"]:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.15); }
+    
+    .control-row { display: flex; gap: 15px; align-items: center; margin-bottom: 16px; }
+    .control-row .count-input { flex: 1; }
+    input[type="number"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; outline: none; }
+    
+    .option-group { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; font-size: 14px; color: #475569; }
+    
+    /* 針對大量中獎者優化的展示盒 */
+    .display-box { min-height: 160px; max-height: 280px; overflow-y: auto; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+    .display-box .animating { font-size: 32px; font-weight: bold; }
+    
+    .winner-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; max-width: 100%; }
+    .winner-tag { background: #f59e0b; color: #fff; padding: 4px 10px; border-radius: 14px; font-weight: 600; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.15); animation: pop 0.2s ease-out; }
+    
+    @keyframes pop {
+      0% { transform: scale(0.6); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* 一鍵複製按鈕樣式 */
+    .btn-copy { width: 100%; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 15px; transition: all 0.2s; display: none; }
+    .btn-copy:hover { background: #059669; }
+
+    .btn-group { display: flex; gap: 10px; }
+    button { flex: 1; padding: 14px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+    .btn-draw { background: #ef4444; color: white; }
+    .btn-draw:hover { background: #dc2626; }
+    .btn-draw:disabled { background: #fca5a5; cursor: not-allowed; }
+    .btn-reset { background: #e2e8f0; color: #475569; flex: 0.35; }
+    .btn-reset:hover { background: #cbd5e1; }
+    
+    .winner-section { margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+    .winner-section h3 { margin: 0 0 10px 0; color: #1e293b; font-size: 16px; }
+    .winner-log { background: #f8fafc; border-radius: 8px; padding: 12px 15px; max-height: 180px; overflow-y: auto; color: #334155; font-size: 14px; line-height: 1.6; }
+    .winner-round { margin-bottom: 10px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 8px; }
+    .winner-round:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>🎉 幸運抽獎機</h1>
+
+    <div class="input-group">
+      <label for="namesInput">參加者名單（每行一個名字）：</label>
+      <textarea id="namesInput" placeholder="請輸入名單..."></textarea>
+    </div>
+
+    <div class="control-row">
+      <div class="count-input">
+        <label for="drawCount">今輪抽取人數：</label>
+        <input type="number" id="drawCount" value="30" min="1">
+      </div>
+    </div>
+
+    <div class="option-group">
+      <input type="checkbox" id="removeWinner" checked>
+      <label for="removeWinner" style="margin:0; cursor:pointer;">中獎後自動從名單移除（避免重複中獎）</label>
+    </div>
+
+    <div class="display-box" id="displayBox">
+      <div class="animating">準備抽獎！</div>
+    </div>
+
+    <!-- 複製按鈕 -->
+    <button class="btn-copy" id="copyBtn" onclick="copyWinners()">📋 一鍵複製今輪得獎名單</button>
+
+    <div class="btn-group">
+      <button class="btn-draw" id="drawBtn" onclick="startDraw()">開始抽 30 人</button>
+      <button class="btn-reset" onclick="resetAll()">重置</button>
+    </div>
+
+    <div class="winner-section">
+      <h3>🏆 中獎歷史紀錄</h3>
+      <div class="winner-log" id="winnerLog">暫無紀錄</div>
+    </div>
+  </div>
+
+  <script>
+    let isDrawing = false;
+    let roundCount = 1;
+    let lastWinners = []; // 紀錄最近一輪得獎者
+
+    // 預設填入 35 個測試名單
+    const defaultSampleNames = Array.from({length: 35}, (_, i) => 參加者 ${i + 1} 號);
+    document.getElementById('namesInput').value = defaultSampleNames.join('\n');
+
+    function getNames() {
+      const rawText = document.getElementById('namesInput').value;
+      return rawText.split('\n').map(name => name.trim()).filter(name => name.length > 0);
+    }
+
+    function startDraw() {
+      if (isDrawing) return;
+
+      const names = getNames();
+      const countInput = document.getElementById('drawCount');
+      let drawNum = parseInt(countInput.value, 10);
+
+      if (names.length === 0) {
+        alert('請先輸入至少一個參加者名字！');
+        return;
+      }
+
+      if (isNaN(drawNum) || drawNum < 1) {
+        alert('請輸入有效的抽獎人數！');
+        return;
+      }
+
+      if (drawNum > names.length) {
+        alert(現時名單只有 ${names.length} 人，無法抽取 ${drawNum} 位得獎者！請增加名單或調整人數。);
+        return;
+      }
+
+      isDrawing = true;
+      const drawBtn = document.getElementById('drawBtn');
+      const copyBtn = document.getElementById('copyBtn');
+      const displayBox = document.getElementById('displayBox');
+      const removeWinner = document.getElementById('removeWinner').checked;
+
+      drawBtn.disabled = true;
+      copyBtn.style.display = 'none'; // 抽獎時先隱藏複製按鈕
+
+      let duration = 2200; 
+      let intervalTime = 50;
+      let elapsed = 0;
+
+      const timer = setInterval(() => {
+        const randomName = names[Math.floor(Math.random() * names.length)];
+        displayBox.innerHTML = <div class="animating">${randomName}</div>;
+        elapsed += intervalTime;
+
+        if (elapsed >= duration) {
+          clearInterval(timer);
+          
+          // 隨機抽選 N 個得獎者
+          const shuffled = [...names].sort(() => 0.5 - Math.random());
+          lastWinners = shuffled.slice(0, drawNum);
+
+          // 顯示結果
+          let tagsHtml = lastWinners.map((w, index) => <span class="winner-tag">${index + 1}. ${w}</span>).join('');
+          displayBox.innerHTML = `
+            <div style="font-size:14px; opacity:0.9; margin-bottom:6px; font-weight:600;">🎊 第 ${roundCount} 輪共 ${lastWinners.length} 位得獎者：</div>
+            <div class="winner-tags">${tagsHtml}</div>
+          `;
+
+          // 顯示「一鍵複製」按鈕
+          copyBtn.style.display = 'block';
+          copyBtn.textContent = 📋 一鍵複製第 ${roundCount} 輪（${lastWinners.length}位）得獎名單;
+
+          // 紀錄歷史
+          addWinnerLog(lastWinners);
+
+          // 自動從輸入框移除已中獎人士
+          if (removeWinner) {
+            const remainingNames = names.filter(name => !lastWinners.includes(name));
+            document.getElementById('namesInput').value = remainingNames.join('\n');
+          }
+
+          roundCount++;
+          isDrawing = false;
+          drawBtn.disabled = false;
+        }
+      }, intervalTime);
+    }
+
+    // 一鍵複製功能
+    function copyWinners() {
+      if (lastWinners.length === 0) return;
+
+      // 格式化為：
+      // 1. 張三
+      // 2. 李四
+      const textToCopy = lastWinners.map((name, index) => ${index + 1}. ${name}).join('\n');
+
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        const copyBtn = document.getElementById('copyBtn');
+        const oldText = copyBtn.textContent;
+        copyBtn.textContent = '✅ 已成功複製到剪貼簿！';
+        copyBtn.style.background = '#059669';
+
+        setTimeout(() => {
+          copyBtn.textContent = oldText;
+          copyBtn.style.background = '#10b981';
+        }, 2000);
+      }).catch(err => {
+        alert('複製失敗，請手動複製結果。');
+      });
+    }
+
+    function addWinnerLog(winners) {
+      const winnerLog = document.getElementById('winnerLog');
+      if (roundCount === 1) winnerLog.innerHTML = '';
+
+      const div = document.createElement('div');
+      div.className = 'winner-round';
+      div.innerHTML = <strong>第 ${roundCount} 輪 (${winners.length}人)：</strong><br>${winners.join('、 ')};
+      winnerLog.prepend(div);
+    }
+
+    function resetAll() {
+      if (confirm('確定要清空所有資料和中獎紀錄嗎？')) {
+        document.getElementById('namesInput').value = defaultSampleNames.join('\n');
+        document.getElementById('drawCount').value = 30;
+        document.getElementById('displayBox').innerHTML = '<div class="animating">準備抽獎！</div>';
+        document.getElementById('winnerLog').innerHTML = '暫無紀錄';
+        document.getElementById('copyBtn').style.display = 'none';
+        lastWinners = [];
+        roundCount = 1;
+      }
+    }
+  </script>
+</body>
+</html>
